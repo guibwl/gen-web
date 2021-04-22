@@ -3,16 +3,13 @@ import { createRouter, createWebHistory, RouteRecordRaw } from 'vue-router';
 export const routes: Array<RouteRecordRaw> = [
   {
     path: '/',
-    name: 'home',
-    redirect: '/a'
+    name: 'Home',
+    redirect: '/home'
   },
   {
-    path: '/a',
-    name: 'pageA',
-    meta: {
-      title: 'A',
-    },
-    component: () => import(/* webpackChunkName: "A" */ '../views/pagea'),
+    path: '/home',
+    name: 'Home',
+    component: () => import('../views/main'),
   }
 ];
 function historyStatePatcher(to: any, from: any) {

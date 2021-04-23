@@ -5,14 +5,12 @@ import {
   ref,
   h,
 } from "vue";
-import { pascalCase, camelCase, paramCase } from "change-case";
-import { isObject } from "@/utils/typeCheck";
+import { camelCase } from "change-case";
+import { isObject, isString } from "@/utils/typeCheck";
 import componentsImporter from "@/components/index";
-import eventsHandler from "./eventsHandler";
-
-type Props = {
-  [x: string]: any;
-};
+import eventsHandler, { markUpdatesFn } from "./eventsHandler";
+import componentsSchemaMiddleware from './componentsSchemaMiddleware';
+import type { Props } from './interfaces';
 
 const componentsLoadCache: Props = {};
 
@@ -55,38 +53,44 @@ export const markRelatedNode = () => {
     
     return node;
   }
+};
+
+const markComponentsNodes = (node: Props, state: Props) => {
+
+  const componentsNodes = {
+    [node.id]: node
+  };
+
+  if (isObject(state.__componentsNodes))
+      Object.assign(componentsNodes, state.__componentsNodes);
+
+
+  Reflect.defineProperty(state, '__componentsNodes', {
+      value: componentsNodes,
+      writable: true,
+  });
 }
 
-const propsEnhancer = ({
-  node,
-  store,
-  state,
-}: Props): Props => {
+const propsEnhancer = ({ node }: Props): Props => {
 
   // Convert to ref, it makes UI can update by state.
   node.props = ref(node.props).value;
 
   const props = {};
 
-  if (isObject(node?.props)) Object.assign(props, node?.props);
+  if (isObject(node?.props))
+    Object.assign(props, node?.props);
 
   if (isObject(node?.events))
-    Object.assign(
-      props,
-      eventsHandler({
-        store,
-        state,
-        node,
-      })
-    );
+    Object.assign(props, eventsHandler({ node }));
 
   return props;
 }
 
 const defineAntdComponent = (node: Props, props: Props, typeNameCamelCase: string) => {
   const Comp =
-    componentsLoadCache[node?.id] ||
-    (componentsLoadCache[node?.id] = defineAsyncComponent(
+    componentsLoadCache[typeNameCamelCase] ||
+    (componentsLoadCache[typeNameCamelCase] = defineAsyncComponent(
       componentsImporter[typeNameCamelCase] as AsyncComponentLoader
     ));
 
@@ -99,29 +103,17 @@ const defineAntdComponent = (node: Props, props: Props, typeNameCamelCase: strin
   });
 }
 
-const defineAntdSubComponent = (node: Props, props: Props, typeNameParamCase: string) => {
-  const typeItems = typeNameParamCase.split("-");
-
-  let typeName = "";
-
-  let childTypeName = "";
-
-  for (let len = typeItems.length, i = len - 1; i > 0; i--) {
-    const parentName = typeItems.slice(0, i).join("-");
-    const childName = typeItems.slice(i, len).join("-");
-
-    typeName = camelCase(parentName);
-    childTypeName = pascalCase(childName);
-
-    if (componentsImporter[typeName]) break;
-  }
+const defineAntdSubComponent = (node: Props, props: Props, typeNameOrigin: string) => {
+  const typeItems = typeNameOrigin.split(".");
+  const [typeName, childTypeName] = typeItems;
+  const typeNameCamelCase = camelCase(typeName);
 
   const comp = async () =>
-    (await componentsImporter[typeName]()).default[childTypeName];
+    (await componentsImporter[typeNameCamelCase]()).default[childTypeName];
 
   const Comp: any =
-    componentsLoadCache[node?.id] ||
-    (componentsLoadCache[node?.id] = defineAsyncComponent(
+    componentsLoadCache[typeNameOrigin] ||
+    (componentsLoadCache[typeNameOrigin] = defineAsyncComponent(
       comp as AsyncComponentLoader
     ));
 
@@ -135,9 +127,7 @@ const defineAntdSubComponent = (node: Props, props: Props, typeNameParamCase: st
 }
 
 const defineNormalComponent = (node: Props, props: Props, typeNameOrigin: string) => {
-  const Comp =
-    componentsLoadCache[node?.id] ||
-    (componentsLoadCache[node?.id] = typeNameOrigin);
+  const Comp = typeNameOrigin;
 
   Reflect.defineProperty(node, "__component", {
     value: {
@@ -151,15 +141,14 @@ const defineNormalComponent = (node: Props, props: Props, typeNameOrigin: string
 const componentsGenerator = (node: Props, props: Props,) => {
   const typeNameOrigin = node?.type;
   const typeNameCamelCase = camelCase(typeNameOrigin);
-  const typeNameParamCase = paramCase(typeNameOrigin);
 
   if (componentsImporter[typeNameCamelCase]) {
 
     defineAntdComponent(node, props, typeNameCamelCase);
 
-  } else if (typeNameOrigin.match(/^[A-Z]/)) {
+  } else if (typeNameOrigin.match(/^[A-Z][\S]+\.[\S]+/)) {
 
-    defineAntdSubComponent(node, props, typeNameParamCase);
+    defineAntdSubComponent(node, props, typeNameOrigin);
   } else {
 
     defineNormalComponent(node, props, typeNameOrigin);
@@ -176,9 +165,10 @@ const leafNodeHandler = (node: Props, componentsContainer: VNode[]) => {
   ) {
     const Comp = node?.__component?.value;
     const props = node?.__component?.props;
+    const _child = typeof child !== 'string' ? undefined : typeof Comp === 'string' ? child : () => child;
 
     Reflect.defineProperty(node, "__component", {
-      value: h(Comp, props, typeof child === 'string' ? child : undefined),
+      value: h(Comp, props, _child),
       writable: true,
     });
 
@@ -252,13 +242,25 @@ const componentsRender = ({
 
     loopDFS(schema, (node: Props) => {
 
-        node = markRelatedNodeInstance(node);
+        if (!node?.id)
+          throw new Error(`expect 'id' property in each node inside the 'schema'.`);
+        
+        if (!isString(node?.id))
+          throw new Error(`expect 'id' property as a string in node inside the 'schema', but got ${node?.id}.`);
 
-        const props = propsEnhancer({
+        markRelatedNodeInstance(node);
+
+        markComponentsNodes(node, state);
+
+        markUpdatesFn({
           node,
           store,
           state,
         });
+
+        const props = propsEnhancer({ node });
+
+        node = componentsSchemaMiddleware(node);
 
         componentsGenerator(node, props);
 

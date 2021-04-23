@@ -4,11 +4,7 @@ import {
 } from "vue";
 import _ from 'lodash';
 import componentsRender from './componentsRender';
-
-type Props = {
-    [x: string]: any;
-};
-
+import type { Props } from './interfaces';
 
 const store: Props = {};
 // Handle state in here, export some method similar React setState which can update state.

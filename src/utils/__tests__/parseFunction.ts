@@ -4,7 +4,7 @@ import {
     getNameFromFunctionStr,
     getParamsFromFunctionStr,
     getContentFromFunctionStr,
-  } from '../eventsHandler';
+  } from '../parseFunction';
   
   
   describe('expect string is a function: ', () => {
@@ -72,72 +72,104 @@ import {
       ${arrowFunction12Content}
   
     }`;
+
+    const arrowFunction13 = `a => {}`;
+    const arrowFunction14 = `a=> {}`;
+    const arrowFunction15 = `async a=> {}`;
+    const arrowFunction16 = `a=> \`\${value}%\`;`;
   
     test('is arrow function', () => {
       {
         expect(arrowFunction1.match(ARROW_FUNCTION_REGEX)).toBeTruthy();
-        const { $2, $3 } = RegExp;
+        const { $2, $4 } = RegExp;
         expect(getParamsFromFunctionStr($2)).toStrictEqual([]);
-        expect(getContentFromFunctionStr($3)).toBe('return 1');
+        expect(getContentFromFunctionStr($4)).toBe('return 1');
       }
       {
         expect(arrowFunction2.match(ARROW_FUNCTION_REGEX)).toBeTruthy();
-        const { $2, $3 } = RegExp;
+        const { $2, $4 } = RegExp;
         expect(getParamsFromFunctionStr($2)).toStrictEqual(['...args']);
-        expect(getContentFromFunctionStr($3)).toBe('return 1');
+        expect(getContentFromFunctionStr($4)).toBe('return 1');
       }
       {
         expect(arrowFunction3.match(ARROW_FUNCTION_REGEX)).toBeTruthy();
-        const { $2, $3 } = RegExp;
+        const { $2, $4 } = RegExp;
         expect(getParamsFromFunctionStr($2)).toStrictEqual(['a', 'b']);
-        expect(getContentFromFunctionStr($3)).toBe('return () => console.log(1);');
+        expect(getContentFromFunctionStr($4)).toBe('return () => console.log(1);');
       }
       {
         expect(arrowFunction4.match(ARROW_FUNCTION_REGEX)).toBeTruthy();
-        const { $2, $3 } = RegExp;
+        const { $2, $4 } = RegExp;
         expect(getParamsFromFunctionStr($2)).toStrictEqual(['a', 'b', 'k', 'j']);
-        expect(getContentFromFunctionStr($3)).toBe('() => console.log(1)');
+        expect(getContentFromFunctionStr($4)).toBe('() => console.log(1)');
       }
       {
         expect(arrowFunction5.match(ARROW_FUNCTION_REGEX)).toBeTruthy();
-        const { $2, $3 } = RegExp;
+        const { $2, $4 } = RegExp;
         expect(getParamsFromFunctionStr($2)).toStrictEqual(['a']);
-        expect(getContentFromFunctionStr($3)).toBe('( k ) => console.log(1)');
+        expect(getContentFromFunctionStr($4)).toBe('( k ) => console.log(1)');
       }
       {
         expect(arrowFunction6.match(ARROW_FUNCTION_REGEX)).toBeTruthy();
-        const { $2, $3 } = RegExp;
+        const { $2, $4 } = RegExp;
         expect(getParamsFromFunctionStr($2)).toStrictEqual([]);
-        expect(getContentFromFunctionStr($3)).toBe(arrowFunction6Content.trim());
+        expect(getContentFromFunctionStr($4)).toBe(arrowFunction6Content.trim());
       }
       {
         expect(arrowFunction7.match(ARROW_FUNCTION_REGEX)).toBeTruthy();
-        const { $2, $3 } = RegExp;
+        const { $2, $4 } = RegExp;
         expect(getParamsFromFunctionStr($2)).toStrictEqual(['x', 'z']);
-        expect(getContentFromFunctionStr($3)).toBe(arrowFunction7Content.trim());
+        expect(getContentFromFunctionStr($4)).toBe(arrowFunction7Content.trim());
       }
       {
         expect(arrowFunction8.match(ARROW_FUNCTION_REGEX)).toBeTruthy();
-        const { $1, $2, $3 } = RegExp;
+        const { $1, $2, $4 } = RegExp;
         expect($1).toBe('async');
         expect(getParamsFromFunctionStr($2)).toStrictEqual(['a', 'b']);
-        expect(getContentFromFunctionStr($3)).toBe('return 1;');
+        expect(getContentFromFunctionStr($4)).toBe('return 1;');
       }
       {
         expect(arrowFunction9.match(ARROW_FUNCTION_REGEX)).toBeTruthy();
-        const { $1, $2, $3 } = RegExp;
+        const { $1, $2, $4 } = RegExp;
         expect($1).toBe('async');
         expect(getParamsFromFunctionStr($2)).toStrictEqual([]);
-        expect(getContentFromFunctionStr($3)).toBe('return 1');
+        expect(getContentFromFunctionStr($4)).toBe('return 1');
       }
       expect(arrowFunction10.match(ARROW_FUNCTION_REGEX)).toBeFalsy();
       expect(arrowFunction11.match(ARROW_FUNCTION_REGEX)).toBeFalsy();
       {
         expect(arrowFunction12.match(ARROW_FUNCTION_REGEX)).toBeTruthy();
-        const { $1, $2, $3 } = RegExp;
+        const { $1, $2, $4 } = RegExp;
         expect($1).toBe('');
         expect(getParamsFromFunctionStr($2)).toStrictEqual(['e', '...arg']);
-        expect(getContentFromFunctionStr($3)).toBe(arrowFunction12Content);
+        expect(getContentFromFunctionStr($4)).toBe(arrowFunction12Content);
+      }
+      {
+        expect(arrowFunction13.match(ARROW_FUNCTION_REGEX)).toBeTruthy();
+        const { $2, $4 } = RegExp;
+        expect(getParamsFromFunctionStr($2)).toStrictEqual(['a']);
+        expect(getContentFromFunctionStr($4)).toBe('');
+      }
+      {
+        expect(arrowFunction14.match(ARROW_FUNCTION_REGEX)).toBeTruthy();
+        const { $2, $4 } = RegExp;
+        expect(getParamsFromFunctionStr($2)).toStrictEqual(['a']);
+        expect(getContentFromFunctionStr($4)).toBe('');
+      }
+      {
+        expect(arrowFunction15.match(ARROW_FUNCTION_REGEX)).toBeTruthy();
+        const {$1, $2, $4 } = RegExp;
+        expect($1).toBe('async');
+        expect(getParamsFromFunctionStr($2)).toStrictEqual(['a']);
+        expect(getContentFromFunctionStr($4)).toBe('');
+      }
+      {
+        expect(arrowFunction16.match(ARROW_FUNCTION_REGEX)).toBeTruthy();
+        const {$1, $2, $3, $4 } = RegExp;
+        const addReturn = !$3;
+        expect($1).toBe('');
+        expect(getParamsFromFunctionStr($2)).toStrictEqual(['a']);
+        expect(getContentFromFunctionStr($4, addReturn)).toBe('return \`\${value}%\`');
       }
     });
   

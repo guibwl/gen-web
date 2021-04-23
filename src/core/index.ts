@@ -7,7 +7,7 @@ import componentsRender from './componentsRender';
 import type { Props } from './interfaces';
 
 const store: Props = {};
-// Handle state in here, export some method similar React setState which can update state.
+
 const createScope = (data: Props, formId?: string) => {
     const state = _.cloneDeep(data);
 

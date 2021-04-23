@@ -132,7 +132,6 @@ export const adminBpsMock = {
                             const [node] = arg.slice(-1);
                             const {updateState, updateChildren} = node;
                             updateChildren(\`支付总数: $\{e.target.value\}\`, 'Typography-02');
-                            updateState({value: e.target.value, placeholder: '请再次输入'});
                         }`
                     },
                 }

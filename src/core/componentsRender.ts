@@ -16,41 +16,41 @@ const componentsLoadCache: Props = {};
 
 export const markRelatedNode = () => {
   const parentNodes: Props[] = [];
-  
+
   return (node: Props) => {
     const [parentNode = null] = parentNodes;
 
     Reflect.defineProperty(node, "parentNode", {
       value: parentNode,
     });
-  
+
     if (Array.isArray(node?.children) && node.children.length) {
       const firstChild = node.children[0];
       const lastChild = node.children[node.children.length - 1];
-  
+
       Reflect.defineProperty(node, "firstChild", {
         value: firstChild,
       });
-  
+
       Reflect.defineProperty(node, "lastChild", {
         value: lastChild,
       });
-  
+
       parentNodes.unshift(node);
     }
-  
+
     if (node.parentNode?.lastChild === node) {
 
-      const [ parentNode ] = parentNodes;
+      const [parentNode] = parentNodes;
 
       // The `parentNode` may just did `unshift` in above,
       // so here we need to delete second `parentNodes`.
       if (parentNode === node)
-          parentNodes.splice(1, 1);
+        parentNodes.splice(1, 1);
       else
-          parentNodes.shift();
+        parentNodes.shift();
     }
-    
+
     return node;
   }
 };
@@ -62,13 +62,21 @@ const markComponentsNodes = (node: Props, state: Props) => {
   };
 
   if (isObject(state.__componentsNodes))
-      Object.assign(componentsNodes, state.__componentsNodes);
+    Object.assign(componentsNodes, state.__componentsNodes);
 
 
   Reflect.defineProperty(state, '__componentsNodes', {
-      value: componentsNodes,
-      writable: true,
+    value: componentsNodes,
+    writable: true,
   });
+}
+
+const childrenEnhancer = ({ node }: Props): Props => {
+
+  if (typeof node.children === 'string')
+    node.children = ref(node.children);
+
+  return node;
 }
 
 const propsEnhancer = ({ node }: Props): Props => {
@@ -155,46 +163,91 @@ const componentsGenerator = (node: Props, props: Props,) => {
   }
 }
 
-const leafNodeHandler = (node: Props, componentsContainer: VNode[]) => {
+const getLeafChildren = (node: Props, Comp: unknown) => {
+  const children = node?.children?.value || node?.children;
 
+  if (isString(children) && isString(Comp)) {
+
+    return children;
+  } else if (isString(children)) {
+
+    return () => children;
+  }
+}
+
+const createLeafComponentInstance = (node: Props) => {
+  const Comp = node?.__component?.value;
+  const props = node?.__component?.props;
+  const children = getLeafChildren(node, Comp);
+
+  Reflect.defineProperty(node, "__component", {
+    value: h(Comp, props, children),
+    writable: true,
+  });
+}
+
+const createComponentInstance = (node: Props) => {
+
+  const { props, value: Comp } = node.__component;
+  const children = node.__component_children.slice();
+  const component = h(
+    Comp,
+    props,
+    typeof Comp === 'string' ? children : () => children
+  );
+
+  Reflect.defineProperty(node, "__component", {
+    value: component,
+    writable: true,
+  });
+}
+
+const isLeafNodeChecker = (node: Props): boolean => {
   const child = node?.children;
 
-  if (
-    !child?.length ||
-    typeof child === 'string'
-  ) {
-    const Comp = node?.__component?.value;
-    const props = node?.__component?.props;
-    const _child = typeof child !== 'string' ? undefined : typeof Comp === 'string' ? child : () => child;
+  if (!child) return true;
+  if (Array.isArray(child) && !child?.length) return true;
+  if (typeof child === 'string') return true;
+  if (typeof child?.value === 'string') return true;
 
-    Reflect.defineProperty(node, "__component", {
-      value: h(Comp, props, _child),
+  return false;
+}
+
+const markComponentChildren = (currentNode: Props, parentNode?: Props) => {
+  // init
+  const notInitial = !!currentNode && currentNode?.__component_children === undefined;
+  if (notInitial)
+    Reflect.defineProperty(currentNode, "__component_children", {
+      value: null,
       writable: true,
     });
+
+  // add values
+  if (parentNode && currentNode)
+    (
+      parentNode.__component_children || (parentNode.__component_children = [])
+    ).push(currentNode.__component);
+};
+
+
+const commitComponents = (node: Props, componentsContainer: VNode[]) => {
+
+  markComponentChildren(node);
+
+  if (!isLeafNodeChecker(node)) {
+    // start commit process
+
+    createLeafComponentInstance(node);
 
     let parentNode = node.parentNode;
     let currentNode = node;
 
-    if (parentNode)
-      (
-        parentNode.__component_children ||
-        (parentNode.__component_children = [])
-      ).push(currentNode.__component);
+    markComponentChildren(currentNode, parentNode);
 
     while (parentNode) {
       if (parentNode.lastChild === currentNode) {
-        const { props, value: Comp } = parentNode.__component;
-        const children = parentNode.__component_children.slice();
-        const parentComponent = h(
-          Comp,
-          props,
-          typeof Comp === 'string' ? children : () => children
-        );
 
-        Reflect.defineProperty(parentNode, "__component", {
-          value: parentComponent,
-          writable: true,
-        });
+        createComponentInstance(parentNode);
 
         if (!parentNode.parentNode)
           componentsContainer.push(parentNode?.__component);
@@ -202,18 +255,15 @@ const leafNodeHandler = (node: Props, componentsContainer: VNode[]) => {
         currentNode = parentNode;
         parentNode = parentNode.parentNode;
 
-        if (parentNode)
-          (
-            parentNode.__component_children ||
-            (parentNode.__component_children = [])
-          ).push(currentNode.__component);
+        markComponentChildren(currentNode, parentNode);
 
       } else {
         parentNode = null;
       }
     }
 
-    if (!node?.parentNode) componentsContainer.push(node?.__component);
+    if (!node?.parentNode)
+      componentsContainer.push(node?.__component);
   }
 }
 
@@ -224,7 +274,7 @@ export const loopDFS = (nodes: Props[], cb: CallableFunction) => {
     const node: Props = nodes.shift() || {};
     if (Array.isArray(node?.children) && node.children.length)
       nodes.unshift(...node.children);
-    
+
     cb(node, n++, nodes);
   }
 }
@@ -242,36 +292,33 @@ const componentsRender = ({
 
     loopDFS(schema, (node: Props) => {
 
-        if (!node?.id)
-          throw new Error(`expect 'id' property in each node inside the 'schema'.`);
-        
-        if (!isString(node?.id))
-          throw new Error(`expect 'id' property as a string in node inside the 'schema', but got ${node?.id}.`);
+      if (!node?.id)
+        throw new Error(`expect 'id' property in each node inside the 'schema'.`);
 
-        markRelatedNodeInstance(node);
+      if (!isString(node?.id))
+        throw new Error(`expect 'id' property as a string in node inside the 'schema', but got ${node?.id}.`);
 
-        markComponentsNodes(node, state);
+      markRelatedNodeInstance(node);
 
-        markUpdatesFn({
-          node,
-          store,
-          state,
-        });
+      markComponentsNodes(node, state);
 
-        const props = propsEnhancer({ node });
+      markUpdatesFn({
+        node,
+        store,
+        state,
+      });
 
-        node = componentsSchemaMiddleware(node);
+      const props = propsEnhancer({ node });
 
-        componentsGenerator(node, props);
+      node = childrenEnhancer({ node });
 
-        Reflect.defineProperty(node, "__component_children", {
-          value: null,
-          writable: true,
-        });
+      node = componentsSchemaMiddleware(node);
 
-        leafNodeHandler(node, componentsContainer);
+      componentsGenerator(node, props);
 
-        componentsKeys.push(node.id);
+      commitComponents(node, componentsContainer);
+
+      componentsKeys.push(node.id);
     });
 
     return componentsContainer;
@@ -293,7 +340,7 @@ function checkIdDuplicate(componentsKeys: string[]) {
 }
 
 export function checkIdDuplicateExecute(componentsKeys: string[]) {
-    
+
   const uniqueKeys: string[] = []
   let duplicatedKey: string | undefined;
   for (let i = 0; i < componentsKeys.length; i++) {
@@ -307,5 +354,5 @@ export function checkIdDuplicateExecute(componentsKeys: string[]) {
   }
 
   if (duplicatedKey !== undefined)
-     throw new Error(`Component id in 'schema' should be unique, but got '${duplicatedKey}' which is duplicated.`);
+    throw new Error(`Component id in 'schema' should be unique, but got '${duplicatedKey}' which is duplicated.`);
 }

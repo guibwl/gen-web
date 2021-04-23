@@ -62,10 +62,10 @@ export const markUpdatesFn = ({
             throw new Error(`expect id for updateEvents should be a string, but got ${typeof id}`);
 
         if (id) {
-            return state.__componentsNodes[id].children = children;
+            return state.__componentsNodes[id].children.value = children;
         }
 
-        return node.children = children;
+        return node.children.value = children;
     };
 
     Reflect.defineProperty(node, 'store', { value: store });

@@ -214,15 +214,14 @@ const isLeafNodeChecker = (node: Props): boolean => {
 }
 
 const markComponentChildren = (currentNode: Props, parentNode?: Props) => {
-  // init
-  const notInitial = !!currentNode && currentNode?.__component_children === undefined;
-  if (notInitial)
+  // init, its mark on currentNode
+  if (currentNode)
     Reflect.defineProperty(currentNode, "__component_children", {
       value: null,
       writable: true,
     });
 
-  // add values
+  // add values on parentNode, witch is initialized on above.
   if (parentNode && currentNode)
     (
       parentNode.__component_children || (parentNode.__component_children = [])
@@ -234,7 +233,7 @@ const commitComponents = (node: Props, componentsContainer: VNode[]) => {
 
   markComponentChildren(node);
 
-  if (!isLeafNodeChecker(node)) {
+  if (isLeafNodeChecker(node)) {
     // start commit process
 
     createLeafComponentInstance(node);
